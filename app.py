@@ -1,15 +1,3 @@
-Sensacional! Se o arquivo baixou na aba anônima, significa que o "caminho" está livre. Agora o Google liberou os dados e o Streamlit vai conseguir ler tudo.
-
-Vamos para o passo final e definitivo:
-
-1. Atualizar o link no GitHub
-Vá ao seu GitHub, abra o arquivo app.py.
-
-Clique no ícone do Lápis para editar.
-
-Apague tudo o que está lá e cole este código abaixo (eu já coloquei o seu link novo na linha 27):
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -30,8 +18,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. SEU NOVO LINK QUE FUNCIONOU
-LINK_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrR_UdZ7I9UVMRDX2_JKMCyzPBJW47sJjga5qxvRPBrPStddAamjmTMdDMxnXsITs-mWRXBu29XAHR/pub?output=csv"
+# 2. SEU LINK QUE FUNCIONOU NA ABA ANÔNIMA
+LINK_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrR_UdZ7l9UVMRDX2_JKMCyzPBJW47sJjga5qxvRPBrPStddAamjmTMdDMxnXsITs-mWRXBu29XAHR/pub?output=csv"
 
 @st.cache_data(ttl=60)
 def carregar_dados():
@@ -80,6 +68,7 @@ try:
         
     with col_pie:
         st.subheader("Perfil por Vidas")
+        col_vidas = 'QUAL A QUANTIDADE DE VIDAS?'
         if col_vidas in df.columns:
             fig_pie = px.pie(df, names=col_vidas, hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
             st.plotly_chart(fig_pie, use_container_width=True)

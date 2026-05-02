@@ -2,126 +2,67 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. CONFIGURAÇÃO DA PÁGINA E ESTILO "CLAUDE" (CSS)
+# 1. CONFIGURAÇÃO ESTILO CLAUDE
 st.set_page_config(page_title="Dashboard PlanMaster", layout="wide")
 
 st.markdown("""
     <style>
-        /* Fundo da página cinza claro */
-        .stApp {
-            background-color: #F8FAF7;
-        }
-        /* Estilização dos cards de métricas */
-        [data-testid="stMetricValue"] {
-            font-size: 32px;
-            color: #1E293B;
-        }
+        .stApp { background-color: #F8FAF7; }
         div[data-testid="metric-container"] {
             background-color: white;
             border: 1px solid #E2E8F0;
             padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
-        /* Esconder menu do Streamlit para parecer um site próprio */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CONEXÃO COM OS DADOS (Link da sua Planilha B em CSV)
-# IMPORTANTE: Substitua o link abaixo pelo seu link que termina em output=csv
+# 2. SEU LINK (O QUE VOCÊ JÁ TINHA)
 LINK_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQB3jdb7OwrGeYwF2VppIy3MUX-pVpJaelKpwFIOfNHoh0DfbgJ9j1NBypBqfnLBNNHo7cHlwbOncYG/pub?output=csv"
 
-@st.cache_data(ttl=600) # Atualiza a cada 10 min
-def buscar_dados():
-    try:
-        dados = pd.read_csv(LINK_CSV)
-        return dados
-    except Exception as e:
-        st.error(f"Erro ao conectar com a planilha: {e}")
-        return None
+@st.cache_data(ttl=600)
+def carregar_dados():
+    df = pd.read_csv(LINK_CSV)
+    # Ajuste de números para os cálculos
+    df['vidas_num'] = df['QUAL A QUANTIDADE DE VIDAS?'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
+    return df
 
-df = buscar_dados()
-
-if df is not None:
-    # 3. BARRA LATERAL (FILTROS)
-    st.sidebar.image("https://upload.wikimedia.org/wikipedia/pt/2/2b/Logotipo_Bradesco.png", width=150) # Opcional: logo do cliente
-    st.sidebar.title("Filtros do Dashboard")
+try:
+    df = carregar_dados()
     
-    # Filtro de Cliente (Caso tenha abas de clientes diferentes na planilha)
-    lista_clientes = df['Cliente'].unique() if 'Cliente' in df.columns else ["PlanMaster"]
-    cliente_sel = st.sidebar.selectbox("Selecione o Cliente", lista_clientes)
+    st.title("📊 Dashboard de Leads — PlanMaster")
     
-    # Filtro de Mês
-    meses_disponiveis = df['Mês/Ano'].unique()
-    mes_sel = st.sidebar.selectbox("Mês de Referência", meses_disponiveis)
-
-    # Filtrando os dados baseados na escolha
-    df_filtrado = df[(df['Mês/Ano'] == mes_sel)]
-    if 'Cliente' in df.columns:
-        df_filtrado = df_filtrado[df_filtrado['Cliente'] == cliente_sel]
-
-    # 4. TÍTULO DO DASHBOARD
-    st.title(f"Planilha de Leads — {cliente_sel}")
-    st.caption(f"Período: {mes_sel} • Dados atualizados via Google Drive")
+    # 3. MÉTRICAS (USANDO OS NOMES REAIS DAS SUAS COLUNAS)
+    c1, c2, c3, c4 = st.columns(4)
+    
+    total_leads = len(df)
+    total_vidas = df['vidas_num'].sum()
+    com_plano = len(df[df['QUAL O SEU PLANO DE SAÚDE ATUAL?'] != 'NÃO TENHO PLANO DE SAÚDE'])
+    
+    c1.metric("TOTAL DE LEADS", total_leads)
+    c2.metric("TOTAL DE VIDAS", int(total_vidas))
+    c3.metric("COM PLANO", com_plano, f"{int((com_plano/total_leads)*100)}%")
+    c4.metric("SEM PLANO", total_leads - com_plano)
 
     st.divider()
 
-    # 5. CARDS DE MÉTRICAS (IGUAL AO CLAUDE)
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # 4. GRÁFICOS
+    col_dir, col_esq = st.columns([2, 1])
     
-    total_leads = len(df_filtrado)
-    total_vidas = df_filtrado['Quantidade de vidas'].sum()
-    leads_com_plano = len(df_filtrado[df_filtrado['Plano atual'] != 'Sem plano'])
-    leads_sem_plano = total_leads - leads_com_plano
-    
-    # Cálculo Ticket Médio (Lógica: Média da coluna Custo Atual para quem tem plano)
-    ticket_medio = df_filtrado[df_filtrado['Plano atual'] != 'Sem plano']['Custo atual'].mean()
-
-    col1.metric("TOTAL DE LEADS", total_leads)
-    col2.metric("TOTAL DE VIDAS", f"{int(total_vidas)}")
-    col3.metric("COM PLANO", f"{leads_com_plano}", f"{int((leads_com_plano/total_leads)*100)}%")
-    col4.metric("SEM PLANO", f"{leads_sem_plano}", f"-{int((leads_sem_plano/total_leads)*100)}%", delta_color="inverse")
-    col5.metric("TICKET MÉDIO", f"R$ {ticket_medio:,.2f}")
-
-    st.write("") # Espaçamento
-
-    # 6. GRÁFICOS INTERATIVOS
-    c1, c2 = st.columns([2, 1])
-
-    with c1:
-        st.subheader("Top Operadoras (Plano Atual)")
-        # Gráfico de barras empilhadas igual ao pedido
-        fig_operadoras = px.bar(
-            df_filtrado, 
-            x="Plano atual", 
-            color="Status", 
-            barmode="stack",
-            template="plotly_white",
-            color_discrete_sequence=px.colors.qualitative.Pastel
-        )
-        fig_operadoras.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_operadoras, use_container_width=True)
-
-    with c2:
-        st.subheader("Distribuição de Vidas")
-        # Contagem de vidas (1 vida, 2 vidas, etc)
-        vidas_contagem = df_filtrado['Quantidade de vidas'].value_counts().reset_index()
-        vidas_contagem.columns = ['Vidas', 'Qtd Leads']
+    with col_dir:
+        st.subheader("Operadoras Atuais")
+        fig = px.bar(df, x="QUAL O SEU PLANO DE SAÚDE ATUAL?", template="plotly_white", color_discrete_sequence=['#0ea5e9'])
+        st.plotly_chart(fig, use_container_width=True)
         
-        fig_pizza = px.pie(
-            vidas_contagem, 
-            values='Qtd Leads', 
-            names='Vidas', 
-            hole=0.4,
-            color_discrete_sequence=px.colors.qualitative.Safe
-        )
-        st.plotly_chart(fig_pizza, use_container_width=True)
+    with col_esq:
+        st.subheader("Distribuição de Vidas")
+        fig_pie = px.pie(df, names="QUAL A QUANTIDADE DE VIDAS?", hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-    # 7. TABELA DE LEADS RECENTES (OPCIONAL)
-    with st.expander("Ver lista completa de leads filtrados"):
-        st.dataframe(df_filtrado[['Nome e WhatsApp', 'Plano atual', 'Quantidade de vidas', 'Status']], use_container_width=True)
+    # 5. TABELA COMPLETA (O QUE VOCÊ PEDIU)
+    st.subheader("📋 Base de Dados Completa")
+    st.dataframe(df, use_container_width=True)
 
-else:
-    st.info("Aguardando carregamento dos dados da Planilha B...")
+except Exception as e:
+    st.error(f"Erro ao carregar dados. Verifique a planilha. Detalhe: {e}")
